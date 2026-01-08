@@ -1,0 +1,67 @@
+FROM ubuntu:22.04
+
+# Installa tool necessari
+RUN apt-get update && apt-get install -y \
+    bash git curl tar build-essential ca-certificates iputils-ping python3 python3-pip  
+    #bash git curl tar build-essential ca-certificates iputils-ping 
+    #&& rm -rf /var/lib/apt/lists/*
+
+WORKDIR /root
+
+# Scarica una versione bootstrap di Go (serve per compilare cfgo)
+RUN curl -L https://go.dev/dl/go1.21.1.linux-amd64.tar.gz -o /tmp/go-bootstrap.tar.gz \
+    && tar -C /usr/local -xzf /tmp/go-bootstrap.tar.gz
+
+ENV PATH=$PATH:/usr/local/go/bin
+
+ENV GOROOT_BOOTSTRAP=/usr/local/go
+
+# Copia la tua Go modificata (cfgo)
+COPY ../go /root/go
+
+# # Compila cfgo per Linux
+WORKDIR /root/go/src
+RUN ./make.bash
+
+# # Aggiorna il PATH per usare la Go appena compilata
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/bin
+
+RUN python3 -m pip install --user requests
+
+# # Copia il codice del middlebox
+WORKDIR /app 
+COPY middlebox.go .
+COPY middleboxHandler.go .
+COPY messageTypes.go .
+COPY go.mod .
+COPY go.sum .
+
+COPY certs_ServerToMiddlebox.py .
+
+#COPY . .
+#COPY Middlebox/middlebox.go .
+#COPY Middlebox/go.mod .
+#COPY Middlebox/go.sum .
+
+# # Compila il middlebox
+RUN go mod tidy && GOOS=linux GOARCH=amd64 go build -o middlebox middlebox.go middleboxHandler.go messageTypes.go
+#RUN go mod tidy && GOOS=linux GOARCH=amd64 go build -o client client.go
+
+WORKDIR /certs 
+
+#RUN go run ~/go/src/crypto/tls/generate_cert.go -host 127.0.0.1 -allowDC
+#RUN go run ~/go/src/crypto/tls/generate_delegated_credential.go -cert-path cert.pem -key-path key.pem -signature-scheme Ed25519 -duration 168h
+
+#RUN env GOOS=linux GOARCH=amd64 go build -v -x -o middlebox middlebox.go middleboxHandler.go messageTypes.go
+
+# # Comando di avvio
+#CMD ["./middlebox"]
+# oppure 
+#CMD [/bin/bash]
+
+
+
+#COPY certs_from_server.py .
+#COPY certs_to_middlebox.py .
+#RUN python3 certs_from_server.py 
+#RUN python3 certs_to_middlebox.py
